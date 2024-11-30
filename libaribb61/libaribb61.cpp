@@ -1338,11 +1338,7 @@ public:
         received = true;
         tlvBuffer.insert(tlvBuffer.end(), buffer.begin(), buffer.end());
         auto syncBytePos = tlvBuffer.begin();
-        if (!stripInvalidData)
-        {
-            outputBuffer.insert(outputBuffer.end(), tlvBuffer.begin(), syncBytePos);
-        }
-        while (tlvBuffer.end() - syncBytePos >= 3)
+        while (tlvBuffer.end() - syncBytePos >= 4)
         {
             auto syncByte = syncBytePos[0];
             if (syncByte != 0x7F)
