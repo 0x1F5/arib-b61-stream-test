@@ -283,7 +283,7 @@ class CardWorker
         sha256.Update(std::span(ecm.begin() + 4, ecm.begin() + 27));
         std::vector<uint8_t> hash(32);
         sha256.Final(hash);
-        for (int i = 0; i < sizeof(hash); i++)
+        for (int i = 0; i < hash.size(); i++)
         {
             hash[i] ^= recv[6 + i];
         }
