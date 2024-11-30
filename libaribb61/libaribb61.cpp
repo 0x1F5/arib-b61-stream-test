@@ -505,8 +505,8 @@ class ARIBB61Decoder
 public:
     ARIBB61Decoder(enum arib_b61_log_level logLevel) : worker(StartCardWorker(logLevel)), logLevel(logLevel)
     {
-        tlvBuffer.reserve(32 * 1024 * 1024);
-        outputBuffer.reserve(32 * 1024 * 1024);
+        tlvBuffer.reserve(128 * 1024);
+        outputBuffer.reserve(128 * 1024);
         siBuffer.emplace(0x0000, MMTSIBuffer{ 0x0000, SIType::PLT });
     }
     void SetInitialBuffering(bool enable)
