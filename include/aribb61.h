@@ -10,8 +10,10 @@ struct arib_b61_decoder;
 
 enum arib_b61_log_level
 {
-    ARIB_B61_LOG_ERROR,
     ARIB_B61_LOG_VERBOSE,
+    ARIB_B61_LOG_DEBUG,
+    ARIB_B61_LOG_INFO,
+    ARIB_B61_LOG_ERROR,
 };
 
 enum arib_b61_status

@@ -1,2 +1,2 @@
-add_executable(aribb61-stream-test main.c)
-target_link_libraries(aribb61-stream-test aribb61)
+add_executable(arib-b61-stream-test main.c)
+target_link_libraries(arib-b61-stream-test aribb61)

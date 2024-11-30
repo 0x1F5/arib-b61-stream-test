@@ -470,6 +470,7 @@ struct ScrambledAsset
 struct ECM
 {
     bool received = false;
+    bool failed = false;
     int version = -1;
     std::optional<std::future<std::vector<uint8_t>>> future;
     KeyType keyType = KeyType::Unknown;
@@ -534,7 +535,7 @@ private:
     {
         for (auto&& packet : encryptedPackets)
         {
-            ProcessMMTP(std::span(outputBuffer.begin() + packet.offset, packet.size));
+            ProcessMMTP(std::span(outputBuffer.begin() + packet.offset, packet.size), true);
         }
         std::vector<EncryptedPacket>().swap(encryptedPackets);
         initialBuffering = false;
@@ -650,18 +651,40 @@ private:
                                 }
                                 else if (ecm->second.future || ecm->second.received)
                                 {
-                                    if (!decryptOnly && (asyncECM || keyType != ecm->second.keyType) && ecm->second.future)
+                                    if (ecm->second.failed)
+                                    {
+                                        return true;
+                                    }
+                                    if ((!asyncECM || keyType != ecm->second.keyType) && ecm->second.future)
                                     {
                                         auto begin = std::chrono::high_resolution_clock::now();
-                                        ecm->second.future->wait();
+                                        auto status = ecm->second.future->wait_for(std::chrono::seconds(1));
                                         auto end = std::chrono::high_resolution_clock::now();
                                         if (logLevel >= ARIB_B61_LOG_VERBOSE)
                                         {
                                             fprintf(stderr, "wait ECM %lld ms\n", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
                                         }
-                                        ecm->second.received = true;
+                                        if (status == std::future_status::timeout)
+                                        {
+                                            if (logLevel >= ARIB_B61_LOG_ERROR)
+                                            {
+                                                fprintf(stderr, "ECM timeout\n");
+                                            }
+                                            ecm->second.failed = true;
+                                            return true;
+                                        }
                                         auto&& r = ecm->second.future->get();
                                         auto oddKey = r.begin();
+                                        if (r.empty())
+                                        {
+                                            if (logLevel >= ARIB_B61_LOG_ERROR)
+                                            {
+                                                fprintf(stderr, "failed to process ECM\n");
+                                            }
+                                            ecm->second.failed = true;
+                                            return true;
+                                        }
+                                        ecm->second.received = true;
                                         auto evenKey = r.begin() + ecm->second.oddKey.size();
                                         if (logLevel >= ARIB_B61_LOG_VERBOSE)
                                         {
@@ -719,6 +742,7 @@ private:
                                     p[0] &= ~(3 << 3); // remove scramble control bits
                                     auto timedFlag = mmtpPayload[2] & 8;
                                     auto aggregationFlag = mmtpPayload[2] & 1;
+#if 0
                                     if (timedFlag && !aggregationFlag)
                                     {
                                         for (int i = 0; i < 14; i++)
@@ -727,7 +751,7 @@ private:
                                             {
                                                 if (logLevel >= ARIB_B61_LOG_VERBOSE)
                                                 {
-                                                    fprintf(stderr, "broken\n");
+                                                    fprintf(stderr, "broken %02x\n", packetId);
                                                 }
                                                 break;
                                             }
@@ -741,12 +765,13 @@ private:
                                             {
                                                 if (logLevel >= ARIB_B61_LOG_VERBOSE)
                                                 {
-                                                    fprintf(stderr, "broken\n");
+                                                    fprintf(stderr, "broken %02x\n", packetId);
                                                 }
                                                 break;
                                             }
                                         }
                                     }
+#endif
                                 }
                             }
                             else if (initialBuffering)
@@ -890,6 +915,10 @@ private:
         ecm->second.version = version;
         p += 2 + 1 + 1 + 1;
         std::vector<uint8_t> ecmData(p, payload.end());
+        if (logLevel >= ARIB_B61_LOG_VERBOSE)
+        {
+            fprintf(stderr, "ECM received %04x\n", si.packetId);
+        }
         auto future = worker.SendECM(std::move(ecmData));
         ecm->second.future = std::move(future);
         if (!initialBuffering)
@@ -1409,6 +1438,10 @@ public:
             syncBytePos = packetEnd;
         }
         tlvBuffer.erase(tlvBuffer.begin(), syncBytePos);
+        if (initialBuffering && outputBuffer.size() > initialBufferingSize)
+        {
+            DecryptPendingPackets();
+        }
     }
 
     void GetHead(const uint8_t** ptr, size_t* size)
