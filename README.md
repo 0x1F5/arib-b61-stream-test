@@ -7,7 +7,7 @@
 確認済み動作環境: Linux (gcc), Windows (MSVC++)
 
 ```
-cmake -B build -S .
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 

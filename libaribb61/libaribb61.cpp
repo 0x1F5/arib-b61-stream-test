@@ -368,7 +368,7 @@ class CardWorker
                 auto resp = ProcessECM(ecm.request);
                 auto end = std::chrono::high_resolution_clock::now();
                 ecm.response.set_value(resp);
-                if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                if (logLevel <= ARIB_B61_LOG_VERBOSE)
                 {
                     fprintf(stderr, "ECM proc %lld ms\n", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
                 }
@@ -630,7 +630,7 @@ private:
                                 {
                                     if (it->second.keyType != keyType)
                                     {
-                                        if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                        if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
                                             fprintf(stderr, "PID %04x key %s => %s\n", packetId, it->second.keyType == KeyType::Even ? "even" : (it->second.keyType == KeyType::Odd ? "odd" : "unk"), keyType == KeyType::Even ? "even" : (keyType == KeyType::Odd ? "odd" : "unk"));
                                         }
@@ -660,13 +660,13 @@ private:
                                         auto begin = std::chrono::high_resolution_clock::now();
                                         auto status = ecm->second.future->wait_for(std::chrono::seconds(1));
                                         auto end = std::chrono::high_resolution_clock::now();
-                                        if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                        if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
                                             fprintf(stderr, "wait ECM %lld ms\n", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
                                         }
                                         if (status == std::future_status::timeout)
                                         {
-                                            if (logLevel >= ARIB_B61_LOG_ERROR)
+                                            if (logLevel <= ARIB_B61_LOG_ERROR)
                                             {
                                                 fprintf(stderr, "ECM timeout\n");
                                             }
@@ -677,7 +677,7 @@ private:
                                         auto oddKey = r.begin();
                                         if (r.empty())
                                         {
-                                            if (logLevel >= ARIB_B61_LOG_ERROR)
+                                            if (logLevel <= ARIB_B61_LOG_ERROR)
                                             {
                                                 fprintf(stderr, "failed to process ECM\n");
                                             }
@@ -686,14 +686,14 @@ private:
                                         }
                                         ecm->second.received = true;
                                         auto evenKey = r.begin() + ecm->second.oddKey.size();
-                                        if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                        if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
                                             fprintf(stderr, "odd: %02x-%02x-%02x-%02x => %02x-%02x-%02x-%02x\n", ecm->second.oddKey[0], ecm->second.oddKey[1], ecm->second.oddKey[2], ecm->second.oddKey[3], oddKey[0], oddKey[1], oddKey[2], oddKey[3]);
                                             fprintf(stderr, "even: %02x-%02x-%02x-%02x => %02x-%02x-%02x-%02x\n", ecm->second.evenKey[0], ecm->second.evenKey[1], ecm->second.evenKey[2], ecm->second.evenKey[3], evenKey[0], evenKey[1], evenKey[2], evenKey[3]);
                                         }
                                         if (std::equal(oddKey, evenKey, ecm->second.oddKey.begin()))
                                         {
-                                            if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                            if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                             {
                                                 fprintf(stderr, "ecm recv, same odd\n");
                                             }
@@ -701,7 +701,7 @@ private:
                                         }
                                         else if (std::equal(evenKey, r.end(), ecm->second.evenKey.begin()))
                                         {
-                                            if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                            if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                             {
                                                 fprintf(stderr, "ecm recv, same even\n");
                                             }
@@ -749,7 +749,7 @@ private:
                                         {
                                             if (mmtpData[i])
                                             {
-                                                if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                                if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                                 {
                                                     fprintf(stderr, "broken %02x\n", packetId);
                                                 }
@@ -763,7 +763,7 @@ private:
                                         {
                                             if (mmtpData[i])
                                             {
-                                                if (logLevel >= ARIB_B61_LOG_VERBOSE)
+                                                if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                                 {
                                                     fprintf(stderr, "broken %02x\n", packetId);
                                                 }
@@ -915,7 +915,7 @@ private:
         ecm->second.version = version;
         p += 2 + 1 + 1 + 1;
         std::vector<uint8_t> ecmData(p, payload.end());
-        if (logLevel >= ARIB_B61_LOG_VERBOSE)
+        if (logLevel <= ARIB_B61_LOG_VERBOSE)
         {
             fprintf(stderr, "ECM received %04x\n", si.packetId);
         }
