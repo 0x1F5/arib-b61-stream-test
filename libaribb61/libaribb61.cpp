@@ -1338,7 +1338,7 @@ public:
         received = true;
         tlvBuffer.insert(tlvBuffer.end(), buffer.begin(), buffer.end());
         auto syncBytePos = tlvBuffer.begin();
-        if (stripInvalidData)
+        if (!stripInvalidData)
         {
             outputBuffer.insert(outputBuffer.end(), tlvBuffer.begin(), syncBytePos);
         }
@@ -1348,7 +1348,7 @@ public:
             if (syncByte != 0x7F)
             {
                 auto nextSyncBytePos = std::find(syncBytePos, tlvBuffer.end(), 0x7F);
-                if (stripInvalidData)
+                if (!stripInvalidData)
                 {
                     outputBuffer.insert(outputBuffer.end(), syncBytePos, nextSyncBytePos);
                 }
@@ -1359,7 +1359,7 @@ public:
             if (packetType != 0x02 && packetType != 0x03 && packetType != 0xfe && packetType != 0xff)
             {
                 auto nextSyncBytePos = std::find(syncBytePos + 1, tlvBuffer.end(), 0x7F);
-                if (stripInvalidData)
+                if (!stripInvalidData)
                 {
                     outputBuffer.insert(outputBuffer.end(), syncBytePos, nextSyncBytePos);
                 }
@@ -1391,7 +1391,7 @@ public:
                 if (cidHeaderType != 0x60 && cidHeaderType != 0x61)
                 {
                     auto nextSyncBytePos = std::find(syncBytePos, tlvBuffer.end(), 0x7F);
-                    if (stripInvalidData)
+                    if (!stripInvalidData)
                     {
                         outputBuffer.insert(outputBuffer.end(), syncBytePos, nextSyncBytePos);
                     }
@@ -1408,7 +1408,7 @@ public:
                     if (payloadBegin > tlvBuffer.end())
                     {
                         auto nextSyncBytePos = std::find(syncBytePos, tlvBuffer.end(), 0x7F);
-                        if (stripInvalidData)
+                        if (!stripInvalidData)
                         {
                             outputBuffer.insert(outputBuffer.end(), syncBytePos, nextSyncBytePos);
                         }
@@ -1468,7 +1468,10 @@ public:
     void Finish()
     {
         initialBuffering = false;
-        outputBuffer.insert(outputBuffer.end(), tlvBuffer.begin(), tlvBuffer.end());
+        if (!stripInvalidData)
+        {
+            outputBuffer.insert(outputBuffer.end(), tlvBuffer.begin(), tlvBuffer.end());
+        }
         tlvBuffer.erase(tlvBuffer.begin(), tlvBuffer.end());
     }
 };
