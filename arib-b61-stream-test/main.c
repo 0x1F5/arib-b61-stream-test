@@ -26,7 +26,7 @@ int main(void)
         {
             break;
         }
-        arib_b61_decoder_put(decoder, read_buf, buf_size);
+        arib_b61_decoder_put(decoder, read_buf, read_size);
         arib_b61_decoder_get_buffer(decoder, &decode_buf, &decode_size);
         if (fwrite(decode_buf, 1, decode_size, out) < decode_size)
         {
