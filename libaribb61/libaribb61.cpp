@@ -1281,7 +1281,7 @@ private:
 
     void CleanupScrambledAsset()
     {
-        std::erase_if(scrambledAssets, [](const auto& x) { return x.second.refCount == 0; });
+        // std::erase_if(scrambledAssets, [](const auto& x) { return x.second.refCount == 0; });
     }
 
     void RemoveProgram(std::unordered_map<uint16_t, Program>::iterator it)
