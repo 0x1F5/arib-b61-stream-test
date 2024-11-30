@@ -1,0 +1,10 @@
+add_library(aribb61 libaribb61.cpp)
+set_property(TARGET aribb61 PROPERTY CXX_STANDARD 20)
+
+find_package(PkgConfig)
+pkg_check_modules(LIBPCSC REQUIRED libpcsclite)
+include_directories(${LIBPCSC_INCLUDE_DIRS})
+target_link_libraries(aribb61 ${LIBPCSC_LIBRARIES})
+pkg_check_modules(LIBCRYPTO REQUIRED libcrypto)
+include_directories(${LIBCRYPTO_INCLUDE_DIRS})
+target_link_libraries(aribb61 ${LIBCRYPTO_LIBRARIES})

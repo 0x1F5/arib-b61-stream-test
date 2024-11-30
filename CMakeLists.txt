@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+project(libaribb61 C CXX)
+include_directories(AFTER include)
+add_subdirectory(libaribb61)
+add_subdirectory(arib-b61-stream-test)
