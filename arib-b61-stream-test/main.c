@@ -1,6 +1,6 @@
+#include "aribb61.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "aribb61.h"
 
 int main(void)
 {

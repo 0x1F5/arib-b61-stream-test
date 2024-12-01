@@ -1,30 +1,33 @@
-#include <cstdio>
-#include <cstddef>
-#include <span>
-#include <optional>
+#include "aribb61.h"
 #include <algorithm>
+#include <array>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdio>
 #include <cstring>
+#include <future>
+#include <mutex>
+#include <openssl/evp.h>
+#include <optional>
+#include <queue>
+#include <span>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <thread>
-#include <future>
-#include <condition_variable>
-#include <mutex>
-#include <queue>
-#include <array>
 #include <variant>
 #include <winscard.h>
-#include <openssl/evp.h>
-#include "aribb61.h"
 
 constexpr uint16_t CA_SYSTEM_ID = 0x0005;
 
 class CardTransaction
 {
-    CardTransaction(const CardTransaction&) = delete;
+    CardTransaction(const CardTransaction &) = delete;
     SCARDHANDLE card;
-public:
-    CardTransaction(SCARDHANDLE card) : card(card) {}
+
+  public:
+    CardTransaction(SCARDHANDLE card) : card(card)
+    {
+    }
     LONG EndTransaction()
     {
         auto r = SCardEndTransaction(card, SCARD_LEAVE_CARD);
@@ -51,8 +54,9 @@ class CardReader
     SCARDCONTEXT context = 0;
     SCARDHANDLE card = 0;
     DWORD activeProtocol = 0;
-    CardReader(const CardReader&) = delete;
-public:
+    CardReader(const CardReader &) = delete;
+
+  public:
     CardReader()
     {
     }
@@ -107,7 +111,8 @@ public:
     {
         LONG result;
         Disconnect();
-        result = SCardConnect(context, reader, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T0 | SCARD_PROTOCOL_T1, &card, &activeProtocol);
+        result = SCardConnect(context, reader, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T0 | SCARD_PROTOCOL_T1, &card,
+                              &activeProtocol);
         if (result != SCARD_S_SUCCESS)
         {
             return result;
@@ -115,20 +120,21 @@ public:
         return SCARD_S_SUCCESS;
     }
 
-    std::optional<CardTransaction> BeginTransaction(LONG* err)
+    std::optional<CardTransaction> BeginTransaction(LONG *err)
     {
         *err = SCardBeginTransaction(card);
         return std::make_optional(card);
     }
 
-    LONG Transmit(std::span<const uint8_t> sendData, std::span<uint8_t> recvData, DWORD* length)
+    LONG Transmit(std::span<const uint8_t> sendData, std::span<uint8_t> recvData, DWORD *length)
     {
         auto sendPci = activeProtocol == SCARD_PROTOCOL_T0 ? SCARD_PCI_T0 : SCARD_PCI_T1;
         LONG r;
         for (int i = 0; i < 5; i++)
         {
             *length = static_cast<DWORD>(recvData.size());
-            r = SCardTransmit(card, sendPci, sendData.data(), static_cast<DWORD>(sendData.size()), nullptr, recvData.data(), length);
+            r = SCardTransmit(card, sendPci, sendData.data(), static_cast<DWORD>(sendData.size()), nullptr,
+                              recvData.data(), length);
             if (r == SCARD_S_SUCCESS)
             {
                 break;
@@ -149,8 +155,9 @@ public:
 
 class SHA256Hash
 {
-    EVP_MD_CTX* mdctx;
-public:
+    EVP_MD_CTX *mdctx;
+
+  public:
     SHA256Hash()
     {
         mdctx = EVP_MD_CTX_new();
@@ -170,8 +177,9 @@ public:
 
 class AES128CTR
 {
-    EVP_CIPHER_CTX* ctx;
-public:
+    EVP_CIPHER_CTX *ctx;
+
+  public:
     AES128CTR()
     {
         ctx = EVP_CIPHER_CTX_new();
@@ -229,18 +237,16 @@ class CardWorker
             0x00, // P1
             0x01, // P2
             0x10, // Lc,
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x8A, 0xF7,
+            0x00,      0x00,      0x00,      0x01,      0x00,      0x00,      0x8A,      0xF7,
             a0init[0], a0init[1], a0init[2], a0init[3], a0init[4], a0init[5], a0init[6], a0init[7],
             0x00, // Le
         };
         uint8_t recv[256] = {};
         DWORD length = 0;
-        auto r = reader.Transmit(std::span{ apdu2 }, std::span{ recv }, &length);
+        auto r = reader.Transmit(std::span{apdu2}, std::span{recv}, &length);
         uint8_t master[32] = {
-            0x4F, 0x4C, 0x7C, 0xEB, 0x34, 0xFE, 0xB0, 0xA3,
-            0x1E, 0x41, 0x19, 0x51, 0xE1, 0x35, 0x15, 0x12,
-            0x87, 0xD3, 0x3D, 0x33, 0xD4, 0x9B, 0x4F, 0x52,
-            0x05, 0x77, 0xF9, 0xEF, 0xE5, 0x56, 0x1F, 0x32,
+            0x4F, 0x4C, 0x7C, 0xEB, 0x34, 0xFE, 0xB0, 0xA3, 0x1E, 0x41, 0x19, 0x51, 0xE1, 0x35, 0x15, 0x12,
+            0x87, 0xD3, 0x3D, 0x33, 0xD4, 0x9B, 0x4F, 0x52, 0x05, 0x77, 0xF9, 0xEF, 0xE5, 0x56, 0x1F, 0x32,
         };
         uint8_t a0response[8] = {};
         uint8_t a0hash[32] = {};
@@ -261,10 +267,10 @@ class CardWorker
         LONG r;
         std::vector<uint8_t> apdu;
         apdu.reserve(ecm.size() + 6);
-        apdu.push_back(0x90); // CLA
-        apdu.push_back(0x34); // INS
-        apdu.push_back(0x00); // P1
-        apdu.push_back(0x01); // P2
+        apdu.push_back(0x90);                             // CLA
+        apdu.push_back(0x34);                             // INS
+        apdu.push_back(0x00);                             // P1
+        apdu.push_back(0x01);                             // P2
         apdu.push_back(static_cast<uint8_t>(ecm.size())); // Lc
         apdu.insert(apdu.end(), ecm.begin(), ecm.end());
         apdu.push_back(0x00); // Le
@@ -273,7 +279,7 @@ class CardWorker
         auto transaction = reader.BeginTransaction(&r);
         GetKCL(kcl);
         DWORD length;
-        reader.Transmit(std::span{ apdu }, std::span{ recv }, &length);
+        reader.Transmit(std::span{apdu}, std::span{recv}, &length);
         transaction->EndTransaction();
         if (length < 6 + 32 + 2 || recv[length - 2] != 0x90 || recv[length - 1] != 0x00)
         {
@@ -301,7 +307,7 @@ class CardWorker
         {
             return false;
         }
-        for (auto&& name : readers)
+        for (auto &&name : readers)
         {
             if (SendInitCommand(name.c_str()))
             {
@@ -327,7 +333,7 @@ class CardWorker
         };
         uint8_t recv[256] = {};
         DWORD length = 0;
-        result = reader.Transmit(std::span{ apdu }, std::span{ recv }, &length);
+        result = reader.Transmit(std::span{apdu}, std::span{recv}, &length);
         if (result != SCARD_S_SUCCESS)
         {
             return false;
@@ -364,13 +370,15 @@ class CardWorker
             if (std::holds_alternative<ECMMessage>(message))
             {
                 auto begin = std::chrono::high_resolution_clock::now();
-                auto& ecm = std::get<ECMMessage>(message);
+                auto &ecm = std::get<ECMMessage>(message);
                 auto resp = ProcessECM(ecm.request);
                 auto end = std::chrono::high_resolution_clock::now();
                 ecm.response.set_value(resp);
                 if (logLevel <= ARIB_B61_LOG_VERBOSE)
                 {
-                    fprintf(stderr, "ECM proc %lld ms\n", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
+                    fprintf(stderr, "ECM proc %lld ms\n",
+                            static_cast<long long>(
+                                std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
                 }
             }
             else if (std::holds_alternative<FinishMessage>(message))
@@ -379,7 +387,8 @@ class CardWorker
             }
         }
     }
-public:
+
+  public:
     CardWorker(enum arib_b61_log_level logLevel) : logLevel(logLevel)
     {
     }
@@ -397,15 +406,18 @@ public:
 
 class CardWorkerRef
 {
-    CardWorkerRef(const CardWorkerRef&) = delete;
+    CardWorkerRef(const CardWorkerRef &) = delete;
     std::shared_ptr<CardWorker> worker;
-public:
-    CardWorkerRef(std::shared_ptr<CardWorker> worker) : worker(worker) {}
+
+  public:
+    CardWorkerRef(std::shared_ptr<CardWorker> worker) : worker(worker)
+    {
+    }
     std::future<std::vector<uint8_t>> SendECM(std::vector<uint8_t> ecm)
     {
         std::promise<std::vector<uint8_t>> response;
         auto future = response.get_future();
-        worker->SendWorkerMessage(ECMMessage{ std::move(ecm), std::move(response) });
+        worker->SendWorkerMessage(ECMMessage{std::move(ecm), std::move(response)});
         return future;
     }
     ~CardWorkerRef()
@@ -502,12 +514,13 @@ class ARIBB61Decoder
     bool initialBuffering = true;
     bool received = false;
     std::vector<EncryptedPacket> encryptedPackets;
-public:
+
+  public:
     ARIBB61Decoder(enum arib_b61_log_level logLevel) : worker(StartCardWorker(logLevel)), logLevel(logLevel)
     {
         tlvBuffer.reserve(128 * 1024);
         outputBuffer.reserve(128 * 1024);
-        siBuffer.emplace(0x0000, MMTSIBuffer{ 0x0000, SIType::PLT });
+        siBuffer.emplace(0x0000, MMTSIBuffer{0x0000, SIType::PLT});
     }
     void SetInitialBuffering(bool enable)
     {
@@ -529,11 +542,11 @@ public:
     {
         this->asyncECM = enable;
     }
-private:
 
+  private:
     void DecryptPendingPackets()
     {
-        for (auto&& packet : encryptedPackets)
+        for (auto &&packet : encryptedPackets)
         {
             ProcessMMTP(std::span(outputBuffer.begin() + packet.offset, packet.size), true);
         }
@@ -574,7 +587,8 @@ private:
         {
             return false;
         }
-        uint32_t packetSequenceNumber = (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) | (static_cast<uint32_t>(p[2]) << 8) | (static_cast<uint32_t>(p[3]) << 0);
+        uint32_t packetSequenceNumber = (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+                                        (static_cast<uint32_t>(p[2]) << 8) | (static_cast<uint32_t>(p[3]) << 0);
         p += 4;
         auto mmtpPayload = p;
         if (extensionFlag)
@@ -608,7 +622,8 @@ private:
                     {
                         return false;
                     }
-                    if (hdrExtType == 1 && hdrExtLength > 0 && mmtpPayload - p >= 1 && mmtpPacket.end() - mmtpPayload >= 8)
+                    if (hdrExtType == 1 && hdrExtLength > 0 && mmtpPayload - p >= 1 &&
+                        mmtpPacket.end() - mmtpPayload >= 8)
                     {
                         auto control = (p[0] >> 3) & 3;
                         auto hasId = p[0] & 4;
@@ -632,7 +647,13 @@ private:
                                     {
                                         if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
-                                            fprintf(stderr, "PID %04x key %s => %s\n", packetId, it->second.keyType == KeyType::Even ? "even" : (it->second.keyType == KeyType::Odd ? "odd" : "unk"), keyType == KeyType::Even ? "even" : (keyType == KeyType::Odd ? "odd" : "unk"));
+                                            fprintf(stderr, "PID %04x key %s => %s\n", packetId,
+                                                    it->second.keyType == KeyType::Even
+                                                        ? "even"
+                                                        : (it->second.keyType == KeyType::Odd ? "odd" : "unk"),
+                                                    keyType == KeyType::Even
+                                                        ? "even"
+                                                        : (keyType == KeyType::Odd ? "odd" : "unk"));
                                         }
                                     }
                                     it->second.keyType = keyType;
@@ -642,11 +663,10 @@ private:
                                 {
                                     if (initialBuffering)
                                     {
-                                        encryptedPackets.push_back(EncryptedPacket
-                                            {
-                                                .offset = static_cast<size_t>(&mmtpPacket[0] - &outputBuffer[0]),
-                                                .size = mmtpPacket.size(),
-                                            });
+                                        encryptedPackets.push_back(EncryptedPacket{
+                                            .offset = static_cast<size_t>(&mmtpPacket[0] - &outputBuffer[0]),
+                                            .size = mmtpPacket.size(),
+                                        });
                                     }
                                 }
                                 else if (ecm->second.future || ecm->second.received)
@@ -662,7 +682,11 @@ private:
                                         auto end = std::chrono::high_resolution_clock::now();
                                         if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
-                                            fprintf(stderr, "wait ECM %lld ms\n", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
+                                            fprintf(
+                                                stderr, "wait ECM %lld ms\n",
+                                                static_cast<long long>(
+                                                    std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
+                                                        .count()));
                                         }
                                         if (status == std::future_status::timeout)
                                         {
@@ -673,7 +697,7 @@ private:
                                             ecm->second.failed = true;
                                             return true;
                                         }
-                                        auto&& r = ecm->second.future->get();
+                                        auto &&r = ecm->second.future->get();
                                         auto oddKey = r.begin();
                                         if (r.empty())
                                         {
@@ -688,8 +712,13 @@ private:
                                         auto evenKey = r.begin() + ecm->second.oddKey.size();
                                         if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
-                                            fprintf(stderr, "odd: %02x-%02x-%02x-%02x => %02x-%02x-%02x-%02x\n", ecm->second.oddKey[0], ecm->second.oddKey[1], ecm->second.oddKey[2], ecm->second.oddKey[3], oddKey[0], oddKey[1], oddKey[2], oddKey[3]);
-                                            fprintf(stderr, "even: %02x-%02x-%02x-%02x => %02x-%02x-%02x-%02x\n", ecm->second.evenKey[0], ecm->second.evenKey[1], ecm->second.evenKey[2], ecm->second.evenKey[3], evenKey[0], evenKey[1], evenKey[2], evenKey[3]);
+                                            fprintf(stderr, "odd: %02x-%02x-%02x-%02x => %02x-%02x-%02x-%02x\n",
+                                                    ecm->second.oddKey[0], ecm->second.oddKey[1], ecm->second.oddKey[2],
+                                                    ecm->second.oddKey[3], oddKey[0], oddKey[1], oddKey[2], oddKey[3]);
+                                            fprintf(stderr, "even: %02x-%02x-%02x-%02x => %02x-%02x-%02x-%02x\n",
+                                                    ecm->second.evenKey[0], ecm->second.evenKey[1],
+                                                    ecm->second.evenKey[2], ecm->second.evenKey[3], evenKey[0],
+                                                    evenKey[1], evenKey[2], evenKey[3]);
                                         }
                                         if (std::equal(oddKey, evenKey, ecm->second.oddKey.begin()))
                                         {
@@ -736,7 +765,8 @@ private:
                                         iv[4] = packetSequenceNumber >> 8;
                                         iv[5] = packetSequenceNumber >> 0;
                                     }
-                                    aes128ctr.Init(keyType == KeyType::Even ? ecm->second.evenKey : ecm->second.oddKey, iv);
+                                    aes128ctr.Init(keyType == KeyType::Even ? ecm->second.evenKey : ecm->second.oddKey,
+                                                   iv);
                                     auto mmtpData = std::span(mmtpPayload + 8, mmtpPacket.end());
                                     aes128ctr.Update(mmtpData, mmtpData);
                                     p[0] &= ~(3 << 3); // remove scramble control bits
@@ -776,11 +806,10 @@ private:
                             }
                             else if (initialBuffering)
                             {
-                                encryptedPackets.push_back(EncryptedPacket
-                                    {
-                                        .offset = static_cast<size_t>(&mmtpPacket[0] - &outputBuffer[0]),
-                                        .size = mmtpPacket.size(),
-                                    });
+                                encryptedPackets.push_back(EncryptedPacket{
+                                    .offset = static_cast<size_t>(&mmtpPacket[0] - &outputBuffer[0]),
+                                    .size = mmtpPacket.size(),
+                                });
                             }
                         }
                     }
@@ -799,7 +828,7 @@ private:
             {
                 return true;
             }
-            MMTSIBuffer& si = entry->second;
+            MMTSIBuffer &si = entry->second;
             if (mmtpPacket.end() - mmtpPayload < 2)
             {
                 return false;
@@ -828,7 +857,7 @@ private:
         return true;
     }
 
-    void ProcessSIMessage(MMTSIBuffer& si, std::span<const uint8_t> payload)
+    void ProcessSIMessage(MMTSIBuffer &si, std::span<const uint8_t> payload)
     {
         auto p = payload.begin();
         if (payload.end() - p < 5)
@@ -868,7 +897,7 @@ private:
         }
     }
 
-    void ProcessM2Message(MMTSIBuffer& si, std::span<const uint8_t> payload)
+    void ProcessM2Message(MMTSIBuffer &si, std::span<const uint8_t> payload)
     {
         auto p = payload.begin();
         if (payload.end() - p < 3)
@@ -883,14 +912,16 @@ private:
             return;
         }
         auto sectionPayload = std::span(p, p + sectionLength - 4);
-        uint32_t crc32 = (static_cast<uint32_t>(p[sectionLength - 4]) << 24) | (static_cast<uint32_t>(p[sectionLength - 3]) << 16) | (static_cast<uint32_t>(p[sectionLength - 2]) << 8) | (static_cast<uint32_t>(p[sectionLength - 1]) << 0);
+        uint32_t crc32 =
+            (static_cast<uint32_t>(p[sectionLength - 4]) << 24) | (static_cast<uint32_t>(p[sectionLength - 3]) << 16) |
+            (static_cast<uint32_t>(p[sectionLength - 2]) << 8) | (static_cast<uint32_t>(p[sectionLength - 1]) << 0);
         if (si.type == SIType::ECM && tableId == 0x82) // 0x83: unused
         {
             ProcessECM(si, sectionPayload);
         }
     }
 
-    void ProcessECM(MMTSIBuffer& si, std::span<const uint8_t> payload)
+    void ProcessECM(MMTSIBuffer &si, std::span<const uint8_t> payload)
     {
         auto p = payload.begin();
         if (payload.end() - p < 2 + 1 + 1 + 1)
@@ -925,7 +956,7 @@ private:
         {
             return;
         }
-        for (auto&& program : programs)
+        for (auto &&program : programs)
         {
             if (!program.second.mptReceived)
             {
@@ -944,7 +975,7 @@ private:
         DecryptPendingPackets();
     }
 
-    void ProcessPAMessage(MMTSIBuffer& si, std::span<const uint8_t> payload)
+    void ProcessPAMessage(MMTSIBuffer &si, std::span<const uint8_t> payload)
     {
         auto p = payload.begin();
         if (payload.end() - p < 1)
@@ -987,7 +1018,7 @@ private:
         }
     }
 
-    void ProcessPLT(MMTSIBuffer& si, std::span<const uint8_t> payload)
+    void ProcessPLT(MMTSIBuffer &si, std::span<const uint8_t> payload)
     {
         auto p = payload.begin();
         if (payload.end() - p < 1)
@@ -996,7 +1027,7 @@ private:
         }
         auto numOfPackage = p[0];
         p++;
-        for (auto&& e : programs)
+        for (auto &&e : programs)
         {
             e.second.refCount = 0;
         }
@@ -1042,11 +1073,11 @@ private:
             }
             else
             {
-                programs.emplace(packetId, Program{ static_cast<uint16_t>(serviceId) });
-                siBuffer.emplace(packetId, MMTSIBuffer{ packetId, SIType::MPT });
+                programs.emplace(packetId, Program{static_cast<uint16_t>(serviceId)});
+                siBuffer.emplace(packetId, MMTSIBuffer{packetId, SIType::MPT});
             }
         }
-        for (auto it = programs.begin(); it != programs.end(); )
+        for (auto it = programs.begin(); it != programs.end();)
         {
             if (it->second.refCount == 0)
             {
@@ -1061,7 +1092,7 @@ private:
         // num_of_ip_delivery...
     }
 
-    void ProcessMPT(MMTSIBuffer& si, std::span<const uint8_t> payload)
+    void ProcessMPT(MMTSIBuffer &si, std::span<const uint8_t> payload)
     {
         auto program = programs.find(si.packetId);
         if (program == programs.end())
@@ -1119,8 +1150,7 @@ private:
             }
             switch (tag)
             {
-            case 0x8004:
-            {
+            case 0x8004: {
                 if (length < 5)
                 {
                     return;
@@ -1149,7 +1179,7 @@ private:
         }
         auto numberOfAssets = p[0];
         p++;
-        for (auto&& s : program->second.scrambledAssets)
+        for (auto &&s : program->second.scrambledAssets)
         {
             auto it = this->scrambledAssets.find(s);
             if (it != this->scrambledAssets.end())
@@ -1224,8 +1254,7 @@ private:
                 }
                 switch (tag)
                 {
-                case 0x8004:
-                {
+                case 0x8004: {
                     if (length < 5)
                     {
                         break;
@@ -1270,7 +1299,7 @@ private:
         auto it = scrambledAssets.find(packetId);
         if (it == scrambledAssets.end())
         {
-            scrambledAssets.emplace(packetId, ScrambledAsset{ ecmPID });
+            scrambledAssets.emplace(packetId, ScrambledAsset{ecmPID});
         }
         else
         {
@@ -1281,7 +1310,8 @@ private:
 
     void CleanupScrambledAsset()
     {
-        // std::erase_if(scrambledAssets, [](const auto& x) { return x.second.refCount == 0; });
+        // std::erase_if(scrambledAssets, [](const auto& x) { return
+        // x.second.refCount == 0; });
     }
 
     void RemoveProgram(std::unordered_map<uint16_t, Program>::iterator it)
@@ -1304,8 +1334,8 @@ private:
         auto e = siBuffer.find(pid);
         if (e == siBuffer.end())
         {
-            siBuffer.emplace(pid, MMTSIBuffer{ pid, SIType::ECM });
-            ecmList.emplace(pid, ECM{ });
+            siBuffer.emplace(pid, MMTSIBuffer{pid, SIType::ECM});
+            ecmList.emplace(pid, ECM{});
             return;
         }
         else
@@ -1332,7 +1362,7 @@ private:
         }
     }
 
-public:
+  public:
     void Put(std::span<const uint8_t> buffer)
     {
         received = true;
@@ -1440,7 +1470,7 @@ public:
         }
     }
 
-    void GetHead(const uint8_t** ptr, size_t* size)
+    void GetHead(const uint8_t **ptr, size_t *size)
     {
         if (initialBuffering)
         {
@@ -1476,7 +1506,7 @@ public:
 #define DLL_EXPORT __declspec(dllexport)
 #else
 #ifndef _MSC_VER
-#define DLL_EXPORT __attribute__((visibility ("default")))
+#define DLL_EXPORT __attribute__((visibility("default")))
 #else
 #define DLL_EXPORT
 #endif
@@ -1486,62 +1516,64 @@ extern "C"
 {
 #endif
 
-DLL_EXPORT enum arib_b61_status arib_b61_decoder_create(struct arib_b61_decoder **decoder, enum arib_b61_log_level level)
+DLL_EXPORT enum arib_b61_status arib_b61_decoder_create(struct arib_b61_decoder **decoder,
+                                                        enum arib_b61_log_level level)
 {
-    *decoder = reinterpret_cast<struct arib_b61_decoder*>(new ARIBB61Decoder(level));
+    *decoder = reinterpret_cast<struct arib_b61_decoder *>(new ARIBB61Decoder(level));
     return ARIB_B61_SUCCESS;
 }
-DLL_EXPORT enum arib_b61_status arib_b61_decoder_put(struct arib_b61_decoder* decoder, const void* data, size_t size)
+DLL_EXPORT enum arib_b61_status arib_b61_decoder_put(struct arib_b61_decoder *decoder, const void *data, size_t size)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
-    dec->Put(std::span(static_cast<const uint8_t*>(data), size));
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
+    dec->Put(std::span(static_cast<const uint8_t *>(data), size));
     return ARIB_B61_SUCCESS;
 }
-DLL_EXPORT enum arib_b61_status arib_b61_decoder_get_buffer(struct arib_b61_decoder* decoder, const void** data, size_t* size)
+DLL_EXPORT enum arib_b61_status arib_b61_decoder_get_buffer(struct arib_b61_decoder *decoder, const void **data,
+                                                            size_t *size)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
-    dec->GetHead(reinterpret_cast<const uint8_t**>(data), size);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
+    dec->GetHead(reinterpret_cast<const uint8_t **>(data), size);
     return ARIB_B61_SUCCESS;
 }
-DLL_EXPORT enum arib_b61_status arib_b61_decoder_consume_buffer(struct arib_b61_decoder* decoder)
+DLL_EXPORT enum arib_b61_status arib_b61_decoder_consume_buffer(struct arib_b61_decoder *decoder)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
     dec->Consume();
     return ARIB_B61_SUCCESS;
 }
-DLL_EXPORT enum arib_b61_status arib_b61_decoder_finish(struct arib_b61_decoder* decoder)
+DLL_EXPORT enum arib_b61_status arib_b61_decoder_finish(struct arib_b61_decoder *decoder)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
     dec->Finish();
     return ARIB_B61_SUCCESS;
 }
-DLL_EXPORT void arib_b61_decoder_set_initial_buffering(struct arib_b61_decoder* decoder, int enable)
+DLL_EXPORT void arib_b61_decoder_set_initial_buffering(struct arib_b61_decoder *decoder, int enable)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
     dec->SetInitialBuffering(enable);
 }
-DLL_EXPORT void arib_b61_decoder_set_strip(struct arib_b61_decoder* decoder, int enable)
+DLL_EXPORT void arib_b61_decoder_set_strip(struct arib_b61_decoder *decoder, int enable)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
     dec->SetStrip(enable);
 }
-DLL_EXPORT void arib_b61_decoder_set_strip_invalid_data(struct arib_b61_decoder* decoder, int enable)
+DLL_EXPORT void arib_b61_decoder_set_strip_invalid_data(struct arib_b61_decoder *decoder, int enable)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
     dec->SetStripInvalidData(enable);
 }
-DLL_EXPORT void arib_b61_decoder_set_async_ecm(struct arib_b61_decoder* decoder, int enable)
+DLL_EXPORT void arib_b61_decoder_set_async_ecm(struct arib_b61_decoder *decoder, int enable)
 {
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(decoder);
     dec->SetAsyncECM(enable);
 }
-DLL_EXPORT void arib_b61_decoder_release(struct arib_b61_decoder** decoder)
+DLL_EXPORT void arib_b61_decoder_release(struct arib_b61_decoder **decoder)
 {
     if (!*decoder)
     {
         return;
     }
-    auto dec = reinterpret_cast<ARIBB61Decoder*>(*decoder);
+    auto dec = reinterpret_cast<ARIBB61Decoder *>(*decoder);
     delete dec;
     *decoder = nullptr;
 }
