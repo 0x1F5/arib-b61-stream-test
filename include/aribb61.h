@@ -1,6 +1,8 @@
 #ifndef ARIBB61_H
 #define ARIBB61_H
 #pragma once
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C"
 {
