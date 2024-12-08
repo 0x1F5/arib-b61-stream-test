@@ -244,6 +244,10 @@ class CardWorker
         uint8_t recv[256] = {};
         DWORD length = 0;
         auto r = reader.Transmit(std::span{apdu2}, std::span{recv}, &length);
+        if (r != SCARD_S_SUCCESS)
+        {
+            return r;
+        }
         uint8_t master[32] = {
             0x4F, 0x4C, 0x7C, 0xEB, 0x34, 0xFE, 0xB0, 0xA3, 0x1E, 0x41, 0x19, 0x51, 0xE1, 0x35, 0x15, 0x12,
             0x87, 0xD3, 0x3D, 0x33, 0xD4, 0x9B, 0x4F, 0x52, 0x05, 0x77, 0xF9, 0xEF, 0xE5, 0x56, 0x1F, 0x32,
@@ -262,9 +266,8 @@ class CardWorker
         sha256.Final(hash);
         return r;
     }
-    std::vector<uint8_t> ProcessECM(std::vector<uint8_t> &ecm)
+    std::vector<uint8_t> ProcessECM(std::vector<uint8_t> &ecm, LONG *r)
     {
-        LONG r;
         std::vector<uint8_t> apdu;
         apdu.reserve(ecm.size() + 6);
         apdu.push_back(0x90);                             // CLA
@@ -276,10 +279,22 @@ class CardWorker
         apdu.push_back(0x00); // Le
         std::array<uint8_t, 32> kcl;
         uint8_t recv[256] = {};
-        auto transaction = reader.BeginTransaction(&r);
-        GetKCL(kcl);
+        auto transaction = reader.BeginTransaction(r);
+        if (*r != SCARD_S_SUCCESS)
+        {
+            return {};
+        }
+        *r = GetKCL(kcl);
+        if (*r != SCARD_S_SUCCESS)
+        {
+            return {};
+        }
         DWORD length;
-        reader.Transmit(std::span{apdu}, std::span{recv}, &length);
+        *r = reader.Transmit(std::span{apdu}, std::span{recv}, &length);
+        if (*r != SCARD_S_SUCCESS)
+        {
+            return {};
+        }
         transaction->EndTransaction();
         if (length < 6 + 32 + 2 || recv[length - 2] != 0x90 || recv[length - 1] != 0x00)
         {
@@ -369,16 +384,53 @@ class CardWorker
             auto message = DequeMessage();
             if (std::holds_alternative<ECMMessage>(message))
             {
-                auto begin = std::chrono::high_resolution_clock::now();
+                int max = 5;
                 auto &ecm = std::get<ECMMessage>(message);
-                auto resp = ProcessECM(ecm.request);
-                auto end = std::chrono::high_resolution_clock::now();
-                ecm.response.set_value(resp);
-                if (logLevel <= ARIB_B61_LOG_VERBOSE)
+                for (int i = 0;; i++)
                 {
-                    fprintf(stderr, "ECM proc %lld ms\n",
-                            static_cast<long long>(
-                                std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
+                    LONG r;
+                    if (i >= max)
+                    {
+                        ecm.response.set_value({});
+                        if (logLevel <= ARIB_B61_LOG_ERROR)
+                        {
+                            fprintf(stderr, "ECM proc failed.\n");
+                        }
+                        break;
+                    }
+                    auto begin = std::chrono::high_resolution_clock::now();
+                    auto resp = ProcessECM(ecm.request, &r);
+                    if (r == SCARD_W_RESET_CARD)
+                    {
+                        if (logLevel <= ARIB_B61_LOG_ERROR)
+                        {
+                            fprintf(stderr, "The smart card has been reset. retry (%d/%d).\n", i + 1, max);
+                        }
+                        if (!this->InitCard())
+                        {
+                            if (logLevel <= ARIB_B61_LOG_ERROR)
+                            {
+                                fprintf(stderr, "Failed to reinitialize the smart card.");
+                            }
+                        }
+                        continue;
+                    }
+                    if (r != SCARD_S_SUCCESS)
+                    {
+                        if (logLevel <= ARIB_B61_LOG_ERROR)
+                        {
+                            fprintf(stderr, "ECM proc failed: %ld\n", r);
+                        }
+                    }
+                    auto end = std::chrono::high_resolution_clock::now();
+                    ecm.response.set_value(resp);
+                    if (logLevel <= ARIB_B61_LOG_VERBOSE)
+                    {
+                        fprintf(stderr, "ECM proc %lld ms\n",
+                                static_cast<long long>(
+                                    std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()));
+                    }
+                    break;
                 }
             }
             else if (std::holds_alternative<FinishMessage>(message))
