@@ -711,7 +711,7 @@ class ARIBB61Decoder
                                     it->second.keyType = keyType;
                                 }
                                 auto ecm = ecmList.find(it->second.ecmPID);
-                                if (ecm == ecmList.end())
+                                if (ecm == ecmList.end() || !(ecm->second.future || ecm->second.received))
                                 {
                                     if (initialBuffering)
                                     {
@@ -721,7 +721,7 @@ class ARIBB61Decoder
                                         });
                                     }
                                 }
-                                else if (ecm->second.future || ecm->second.received)
+                                else
                                 {
                                     if (ecm->second.failed)
                                     {
