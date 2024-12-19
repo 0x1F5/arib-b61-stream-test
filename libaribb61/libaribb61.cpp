@@ -1066,6 +1066,26 @@ class ARIBB61Decoder
         if (si.type == SIType::MPT && tableId == 0x20)
         {
             ProcessMPT(si, table);
+            if (initialBuffering)
+            {
+                auto mptReceivedPrograms = 0;
+                auto scrambledPrograms = 0;
+                for (auto &&program : programs)
+                {
+                    if (program.second.mptReceived)
+                    {
+                        mptReceivedPrograms++;
+                    }
+                    if (program.second.ecmPID != 0xffff)
+                    {
+                        scrambledPrograms++;
+                    }
+                }
+                if (mptReceivedPrograms == programs.size() && !scrambledPrograms)
+                {
+                    initialBuffering = false;
+                }
+            }
             return;
         }
     }
