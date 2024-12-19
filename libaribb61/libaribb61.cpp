@@ -248,6 +248,33 @@ class CardWorker
         {
             return r;
         }
+        if (length != 48)
+        {
+            if (logLevel <= ARIB_B61_LOG_ERROR)
+            {
+                fprintf(stderr, "KCL failed: invalid length\n");
+            }
+            return SCARD_F_UNKNOWN_ERROR;
+        }
+        auto sw1 = recv[length - 2];
+        auto sw2 = recv[length - 1];
+        if (sw1 != 0x90 || sw2 != 0x00)
+        {
+            if (logLevel <= ARIB_B61_LOG_ERROR)
+            {
+                fprintf(stderr, "KCL failed: SW=%02x%02x\n", sw1, sw2);
+            }
+            return SCARD_F_UNKNOWN_ERROR;
+        }
+        auto returnCode = (recv[4] << 8) | recv[5];
+        if (returnCode != 0x2100)
+        {
+            if (logLevel <= ARIB_B61_LOG_ERROR)
+            {
+                fprintf(stderr, "KCL failed: RC=%04x\n", returnCode);
+            }
+            return SCARD_F_UNKNOWN_ERROR;
+        }
         uint8_t master[32] = {
             0x4F, 0x4C, 0x7C, 0xEB, 0x34, 0xFE, 0xB0, 0xA3, 0x1E, 0x41, 0x19, 0x51, 0xE1, 0x35, 0x15, 0x12,
             0x87, 0xD3, 0x3D, 0x33, 0xD4, 0x9B, 0x4F, 0x52, 0x05, 0x77, 0xF9, 0xEF, 0xE5, 0x56, 0x1F, 0x32,
@@ -298,6 +325,34 @@ class CardWorker
         transaction->EndTransaction();
         if (length < 6 + 32 + 2 || recv[length - 2] != 0x90 || recv[length - 1] != 0x00)
         {
+            return {};
+        }
+        auto returnCode = (recv[4] << 8) | recv[5];
+        if (returnCode != 0x0800 && returnCode != 0x0600 && returnCode != 0x4680)
+        {
+            switch (returnCode)
+            {
+            case 0xa103:
+            case 0x8901:
+            case 0x8701:
+            case 0x8902:
+            case 0x8702:
+            case 0x8903:
+            case 0x8703:
+            case 0x8700:
+            case 0x8608:
+                if (logLevel <= ARIB_B61_LOG_ERROR)
+                {
+                    fprintf(stderr, "ECM proc failed (unpurchased): %04x\n", returnCode);
+                }
+                break;
+            default:
+                if (logLevel <= ARIB_B61_LOG_ERROR)
+                {
+                    fprintf(stderr, "ECM proc failed: %04x\n", returnCode);
+                }
+                break;
+            }
             return {};
         }
         sha256.Update(kcl);
@@ -353,13 +408,18 @@ class CardWorker
         {
             return false;
         }
-        if (length < 2)
+        if (length < 19)
         {
             return false;
         }
         auto sw1 = recv[length - 2];
         auto sw2 = recv[length - 1];
         if (sw1 != 0x90 || sw2 != 0x00)
+        {
+            return false;
+        }
+        auto returnCode = (recv[4] << 8) | recv[5];
+        if (returnCode != 0x2100)
         {
             return false;
         }
@@ -982,6 +1042,10 @@ class ARIBB61Decoder
         }
         auto ecm = ecmList.find(si.packetId);
         if (ecm == ecmList.end())
+        {
+            return;
+        }
+        if (ecm->second.failed)
         {
             return;
         }
