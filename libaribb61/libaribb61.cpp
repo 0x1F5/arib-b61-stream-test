@@ -790,7 +790,7 @@ class ARIBB61Decoder
                                     if ((!asyncECM || keyType != ecm->second.keyType) && ecm->second.future)
                                     {
                                         auto begin = std::chrono::high_resolution_clock::now();
-                                        auto status = ecm->second.future->wait_for(std::chrono::seconds(1));
+                                        auto status = ecm->second.future->wait_for(std::chrono::seconds(4));
                                         auto end = std::chrono::high_resolution_clock::now();
                                         if (logLevel <= ARIB_B61_LOG_VERBOSE)
                                         {
