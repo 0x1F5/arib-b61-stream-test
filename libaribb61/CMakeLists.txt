@@ -1,5 +1,8 @@
 add_library(aribb61 libaribb61.cpp)
 set_property(TARGET aribb61 PROPERTY CXX_STANDARD 20)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(aribb61 Threads::Threads)
 
 find_package(PkgConfig)
 pkg_check_modules(LIBPCSC REQUIRED libpcsclite)
